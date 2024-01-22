@@ -485,6 +485,8 @@ exports.getOrderstatusAndDate = async (req,res,next)=>{
 
 
   }
+
+
   
   exports.orderwithDeliveryDate=async(req,res)=>{
     const page = parseInt(req.query.page);
@@ -501,6 +503,7 @@ exports.getOrderstatusAndDate = async (req,res,next)=>{
       total_doc:Math.round (total_doc/limit)
       };
     }
+    
     if (startIndex > 0)
     {
       result.previous = {

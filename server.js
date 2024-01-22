@@ -29,6 +29,7 @@ const addStockRouter=require("./routes/addStock");
 const stockManager=require('./routes/stockManager')
 const mobileRouter=require('./routes/mobile')
 const Production_Incahrge=require('./routes/Production_Incharge')
+const Dispatch=require('./routes/Dispatch_Manager.js')
 
 
 app.use("/admin", adminRouter);
@@ -42,6 +43,7 @@ app.use("/addstock",addStockRouter);
 app.use("/stockManager",stockManager)
 app.use("/mobile",mobileRouter)
 app.use("/Production_In", Production_Incahrge)
+app.use('/Dispatch',Dispatch)
 
 // ------amit-------
 // Require routes

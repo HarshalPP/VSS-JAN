@@ -53,10 +53,12 @@ const productionHeadSchema = new Schema({
     type: String,
     required: true
   },
+
   completionDate: {
     type: String,
     required: true
   }
+  
 });
 
 const Production_head = mongoose.model("productionhead", productionHeadSchema);

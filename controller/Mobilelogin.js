@@ -2,6 +2,9 @@ const Mobilelogin=require('../models/mobile')
 const bcrypt =require('bcrypt')
 const jwt=require('jsonwebtoken')
 const keyvalue=process.env.KEY
+const redisClient =require('../config/redis')
+const { promisify } = require('util');
+const { json } = require('express')
 
 exports.create = async (req, res) => {
   try {
@@ -77,25 +80,43 @@ exports.create = async (req, res) => {
 
 // }
 
-exports.get= async(req,res)=>{
-  try{
+const getAsync = promisify(redisClient.get).bind(redisClient);
+const setExAsync = promisify(redisClient.setex).bind(redisClient);
 
-    const Getdata= await Mobilelogin.find({})
-    if(Getdata){
-      res.status(200).json({
-        Details:Getdata,
+exports.get = async (req, res) => {
+  try {
+    const key = 'getdata';
 
-      })
+    if (!redisClient.connected) {
+      console.error('Redis Client is not connected');
+      return res.status(500).json({
+        message: 'Redis Client is not connected'
+      });
     }
 
-  }
-  catch(error){
-   res.status(500).json({
-    Error:error
-   })
-  }
-}
+    const cachedData = await getAsync(key);
 
+    if (cachedData) {
+      console.log('Data retrieved from cache', JSON.parse(cachedData));
+      return res.json({ data: JSON.parse(cachedData) });
+    }
+
+    const getData = await Mobilelogin.find({});
+
+    if (getData.length > 0) {
+      await setExAsync(key, 3600, JSON.stringify(getData));
+      return res.json({ data: getData });
+    } else {
+      console.log('No data found');
+      return res.status(404).json({ error: 'No data found' });
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error'
+    });
+  }
+};
 
 
 exports.login = async (req, res) => {

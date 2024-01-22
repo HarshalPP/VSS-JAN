@@ -5,7 +5,55 @@ const mongoose = require('mongoose');
 const { notify } = require("../routes/productionhead");
 const sales = require("../models/sales");
 const eventEmitter = require("../utils/eventEmitter");
-const SalesManager = require('../models/sales') 
+const SalesManager = require('../models/sales')
+const redisClient = require('../config/redis')
+const { promisify } = require('util');
+
+// Assuming redisClient is already created and connected elsewhere in your code
+// Example: const redisClient = redis.createClient();
+
+const getAsync = promisify(redisClient.get).bind(redisClient);
+const setExAsync = promisify(redisClient.setex).bind(redisClient);
+
+
+// exports.checkOrderDetails = async (req, res) => {
+//   try {
+//     const key = 'allOrders'; // Adjust the key as needed
+
+//     if (!redisClient) {
+//       console.error('Redis client is not connected');
+//       return res.status(500).json({
+//         message: 'Redis Client is not connected',
+//       });
+//     }
+
+//     const cachedData = await getAsync(key);
+
+//     if (cachedData) {
+//       console.log('Order details from cache', JSON.parse(cachedData));
+//       return res.json({ data: JSON.parse(cachedData) });
+//     }
+
+//     const finddetails = await SalesManager.find({})
+//       .populate({
+//         path: 'productionincharge',
+//         select: '_id UserName ',
+//       })
+//       .sort({ currentDate: -1 });
+
+//     if (finddetails.length > 0) {
+//       // Store data in Redis with an expiration time (e.g., 1 hour)
+//       await setExAsync(key, 30, JSON.stringify(finddetails));
+//       return res.json({ data: finddetails });
+//     } else {
+//       console.log('No orders found in the database');
+//       return res.status(404).json({ error: 'No Orders found' });
+//     }
+//   } catch (error) {
+//     console.error('Error:', error);
+//     return res.status(500).json({ error: 'Internal Server Error' });
+//   }
+// };
 
 
 // To Accept order and Reject the orders //
@@ -58,6 +106,7 @@ exports.checkorder = async (req, res) => {
   }
 };
 
+
 async function notifysalesManager(orderId, eventType) {
   try {
     // Use findOne to find the order details by orderId
@@ -94,12 +143,15 @@ async function notifysalesManager(orderId, eventType) {
 }
 
 
+
+
+
 exports.checkOrderDetails = async (req, res) => {
   try {
     const finddetails = await SalesManager.find({}).populate({
       path: 'productionincharge',
       select: '_id UserName' // Specify the fields you want to include from the 'productionincharge' collection
-  })
+  }).sort({currentDate:-1})
     res.status(200).json({
       message: 'Order Details is shows',
       orderdetails: finddetails
@@ -112,6 +164,11 @@ exports.checkOrderDetails = async (req, res) => {
     })
   }
 }
+
+
+
+
+
 
 exports.create = async (req, res) => {
   // Rest of the code will go here
@@ -210,10 +267,10 @@ exports.EditOrder = async (req, res) => {
   try {
     const findsalesOrder = await SalesManager.findById(req.params.id);
     if (findsalesOrder) {
-      const productioninchargeObjectId=mongoose.Types.ObjectId(req.body.productionincharge)
+      const productioninchargeObjectId = mongoose.Types.ObjectId(req.body.productionincharge)
       const updatesalesOrder = await SalesManager.findByIdAndUpdate(req.params.id, {
-        $set:{
-          productionincharge:productioninchargeObjectId
+        $set: {
+          productionincharge: productioninchargeObjectId
         }
       }, { new: true });
       // Use { new: true } to get the updated document as a result

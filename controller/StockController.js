@@ -143,11 +143,13 @@ var Production_incharge = require("../models/Stock_M");
 //     return `batch-${uniqueIdentifier}`;
 
 // }
+
+
 exports.create = async (req, res) => {
   const qwe = req.body;
 
   try {
-    const stock_data = await Production_incharge.find({
+    const existingStock = await Production_incharge.findOne({
       $and: [
         {
           product: qwe.product,
@@ -165,8 +167,8 @@ exports.create = async (req, res) => {
       ],
     });
 
-    if (stock_data.length === 0) {
-      // Stock doesn't exist, create a new entry
+    if (!existingStock) {
+      // Stock doesn't exist, create a new entry for the first batch
       const newBatchNumber = generateBatchNumber();
 
       const newStock = new Production_incharge({
@@ -184,6 +186,31 @@ exports.create = async (req, res) => {
         weight: qwe.weight,
         approx_weight: qwe.approx_weight,
         batch_number: [newBatchNumber], // Only include the new batch number
+        ready_production: qwe.ready_production,
+    vehical_no: qwe.vehical_no,
+    vendor: qwe.vendor,
+    production_incharge_name: qwe.production_incharge_name,
+    assign_date: qwe.assign_date,
+    thickness_selected: qwe.thickness_selected,
+    width_selected: qwe.width_selected,
+    color_selected: qwe.color_selected,
+    company_name_selected: qwe.company_name_selected,
+    completion_date: qwe.completion_date,
+    batch_assign: qwe.batch_assign,
+    note: qwe.note,
+    density: qwe.density,
+    approx_length_in_batch:
+      qwe.weight / (qwe.thickness * qwe.width * qwe.density), //7.84e-6
+    approx_weight_per_mm: qwe.density * (qwe.thickness * qwe.width),
+    pcs_cut: qwe.pcs_cut,
+    length_per_pcs_cut: qwe.length_per_pcs_cut,
+    approx_weight_cut:
+      qwe.density *
+      qwe.thickness *
+      qwe.width *
+      qwe.pcs_cut *
+      qwe.length_per_pcs_cut,
+    total_length_cut: qwe.pcs_cut * qwe.length_per_pcs_cut
         // ... other properties ...
       });
 
@@ -200,22 +227,12 @@ exports.create = async (req, res) => {
     } else {
       // Stock already exists
       console.log("Stock Already Existed");
-      const existingStock = stock_data[0];
-
       const newBatchNumber = generateBatchNumber();
 
       existingStock.batch_number.push(newBatchNumber); // Add the new batch number to existing batch numbers
 
-      // Retain the original weight when updating existing stock
-      const originalWeight = existingStock.weight;
-
-      // Update the weight of the existing stock
-      existingStock.weight += qwe.weight;
-
-      await existingStock.save();
-
-      // Create a new instance for the new stock
-      const newStock = new Production_incharge({
+      // Create a new instance for the new batch
+      const newStockBatch = new Production_incharge({
         product: qwe.product,
         company: qwe.company,
         grade: qwe.grade,
@@ -233,7 +250,12 @@ exports.create = async (req, res) => {
         // ... other properties ...
       });
 
-      const savedNewStock = await newStock.save();
+      const savedStockBatch = await newStockBatch.save();
+
+      // Update the weight of the existing stock
+      existingStock.weight += qwe.weight;
+
+      await existingStock.save();
 
       res.status(201).json({
         status: 200,
@@ -242,13 +264,13 @@ exports.create = async (req, res) => {
           stockData: existingStock,
           batches: existingStock.batch_number.map((batch) => ({
             batchNumber: batch,
-            originalWeight: originalWeight,
-            stockData: { ...existingStock.toObject(), weight: originalWeight },
+            originalWeight: qwe.weight,
+            stockData: { ...existingStock.toObject(), weight: qwe.weight },
           })),
         },
         newStock: {
-          stockData: savedNewStock,
-          batches: [{ batchNumber: newBatchNumber, originalWeight: qwe.weight, stockData: savedNewStock }],
+          stockData: savedStockBatch,
+          batches: [{ batchNumber: newBatchNumber, originalWeight: qwe.weight, stockData: savedStockBatch }],
         },
       });
     }
@@ -364,6 +386,8 @@ exports.batch_sort_by_weight_all_batch = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
 exports.edit = async (req, res) => {
   try {
     const user_data = await Production_incharge.findById(req.params.id);
@@ -385,6 +409,8 @@ exports.edit = async (req, res) => {
     res.status(400).json({ message: err.message });
   }
 };
+
+
 // DElete by ID
 exports.delete = async (req, res) => {
   try {

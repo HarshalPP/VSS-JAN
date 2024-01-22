@@ -39,13 +39,18 @@ const saleSchema = new Schema({
     maxlength: 10
   },
   //--------- order create-----------
-  sales_id:{
-    type: Number//,
-    //required: true
+  // sales_id:{
+  //   type: Number | String | mongoose.Schema.Types.ObjectId //,
+  //   //required: true
+  // },
+  sales_id: {
+    type: mongoose.Schema.Types.Mixed,
   },
+  
   sales_name:{
     type: String//,required: true
   },
+
   orderId:
   {
     type: Number,
@@ -66,10 +71,17 @@ const saleSchema = new Schema({
   },
 
   orderstatus: {
-    type: String // Use an array if you want to allow both String and Number
+    type: String, // Use an array if you want to allow both String and Number
+    default:'pending'
   },
 
-  
+  Order_mark:{
+    type:String,
+    default:'pending'
+  },
+
+
+
   products: [
     {
     isOrderReady:
@@ -77,9 +89,12 @@ const saleSchema = new Schema({
     type: Boolean
   },
     productId:{
-      type: String//,
+      // type: String//,
+      type:mongoose.Schema.Types.ObjectId,
+      ref: 'productionschemas',
 //      required: true
     },
+
   select_product:
   {
     type: String//,
@@ -185,6 +200,7 @@ const saleSchema = new Schema({
       }
     }]
   }],
+
   //-------- production head data-----------
   ph_id:{
     type: String
@@ -200,17 +216,29 @@ const saleSchema = new Schema({
   //------- dispatch manager
   smName:
   {
-    type :String//,
+    type :String//
   //  required:true
   },
-  dp_id:{
 
-  },
+  // dp_id:{
+
+  // },
+
+  db_id:[
+    {
+    type:mongoose.Schema.Types.ObjectId,
+    ref:'mobile'
+    }
+  ],
+
+  
+  
   vehicleNum:
   {
     type: String//,
 //    required:true
   },
+
   dpDate:
   {
     type : String//,
@@ -218,9 +246,11 @@ const saleSchema = new Schema({
   },
   dpRecieved:
   {
-    type: String//,
+    type: String ,
+    default:'Not-Received'
 //    required: true
   },
+
   dpPhone:
   {
     type:Number//,
@@ -242,6 +272,20 @@ const saleSchema = new Schema({
       ref: 'mobile',
     },
   ],
+
+  pdf_order: {
+    type: {
+        type: String,
+        default: 'application/pdf',
+    },
+    data: Buffer,
+},
+
+
+
+
+
+
 
 },
 { 

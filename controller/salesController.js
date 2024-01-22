@@ -1,4 +1,4 @@
-const sales = require("../models/sales");
+const AWS=require('aws-sdk')
 const salesorder = require("../models/sales");
 const mongoose = require('mongoose');
 const moment = require('moment');
@@ -10,6 +10,19 @@ const redisClient = require('../config/redis');
 const eventEmitter = require('../utils/eventEmitter');
 const admin = require('firebase-admin');
 const serviceAccount = require('../config/fcm.json');
+const puppeteer = require('puppeteer');
+const fs = require('fs').promises;
+const fileSystem = require('fs');
+const path = require('path');
+
+
+AWS.config.update({
+    accessKeyId: 'AKIAQFEA6ARMW5YU3TEA',
+    secretAccessKey: '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',
+    region: 'Asia Pacific (Mumbai) ap-south-1',
+  });
+
+
 
 // Initialize Firebase Admin SDK
 admin.initializeApp({
@@ -269,6 +282,7 @@ eventEmitter.on('OrderRejected', async ({ salesPerson }) => {
 // });
 
 
+
 exports.create = async (req, res) => {
     try {
         const data = (max) => {
@@ -276,10 +290,19 @@ exports.create = async (req, res) => {
             console.log(newdata);
             return newdata;
         };
+
         // Replace max with a specific value when calling the function
         const result = data(1000000000000000); // Replace 100 with your desired max value
 
         // Create a new sales order instance
+        const orderId = result;  // Store the generated order ID in a variable
+        const pdfDirectory = path.join(__dirname, 'order');  // Specify the directory where you want to save the PDF files
+        const pdfPath = path.join(pdfDirectory, `${orderId}.pdf`);  // Specify the path for the PDF file
+        console.log(pdfPath)
+
+        // Create the 'order' directory if it doesn't exist
+        await fs.mkdir(pdfDirectory, { recursive: true });
+
         const user = new salesorder({
             clientName: req.body.clientName,
             firmName: req.body.firmName,
@@ -288,12 +311,13 @@ exports.create = async (req, res) => {
             phone_no: req.body.phone_no,
             sales_id: req.body.sales_id,
             sales_name: req.body.sales_name,
-            orderId:  result,
+            orderId: orderId,  // Use the stored order ID
             currentDate: new Date().toISOString(),
             deliveryDate: req.body.deliveryDate,
             note: req.body.note,
-            orderstatus: req.body.orderstatus, // 1-red -> not start, 2-orange -> in process, 3-green -> complete
-            products: req.body.products, // Assuming req.body.products is an array of products
+            orderstatus: req.body.orderstatus,
+            Order_mark: req.body.Order_mark,
+            products: req.body.products,
             ph_id: req.body.ph_id,
             ph_name: req.body.ph_name,
             process_bar: req.body.process_bar,
@@ -303,10 +327,14 @@ exports.create = async (req, res) => {
             dpRecieved: req.body.dpRecieved,
             dpPhone: req.body.dpPhone,
             dpTotalWeight: req.body.dpTotalWeight,
-            productionincharge:req.body.productionincharge
+            productionincharge: req.body.productionincharge,
+            pdf_order: {
+                type: 'application/pdf',
+                data: null,  // Initialize with null, will be replaced later
+            },
         });
 
-        // Check stock availability for each product in the order
+             // Check stock availability for each product in the order
         for (const product of req.body.products) {
             const product_name = product.select_product;
             const company = product.company;
@@ -335,16 +363,257 @@ exports.create = async (req, res) => {
                 return res.status(403).json({ "status": 403, "msg": 'Order cannot be placed due to insufficient stock' });
             }
         }
+        
+
+        const browser = await puppeteer.launch({
+            headless: true, // Set to true if you want to run in headless mode
+        });
+
+        const page = await browser.newPage();
+
+        // Assuming 'orderDetailsHTML' is a variable containing your HTML content
+        const orderDetailsHTML = `
+        <html>
+            <head>
+                <style>
+                    body {
+                        font-family: 'Arial', sans-serif;
+                        margin: 20px;
+                        background-color: #f4f4f4;
+                        color: #333;
+                    }
+    
+                    h1, h2 {
+                        color: #007bff;
+                    }
+    
+                    p {
+                        margin-bottom: 5px;
+                    }
+    
+                    ul {
+                        list-style: none;
+                        padding: 0;
+                    }
+    
+                    li {
+                        border: 1px solid #ddd;
+                        border-radius: 5px;
+                        margin-bottom: 10px;
+                        padding: 15px;
+                        background-color: #fff;
+                        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+                    }
+    
+                    li:last-child {
+                        margin-bottom: 0;
+                    }
+
+    
+                    strong {
+                        color: #007bff;
+                    }
+
+                </style>
+                <title>Order Details</title>
+            </head>
+            <body>
+                <h1>Order Details</h1>
+                <p>Order ID: ${orderId}</p>
+                <p>Client Name: ${req.body.clientName}</p>
+                <p>Firm Name: ${req.body.firmName}</p>
+                <p>Address: ${req.body.address}</p>
+                <p>City: ${req.body.city}</p>
+                <p>Phone Number: ${req.body.phone_no}</p>
+                <p>Order Status: ${req.body.orderstatus !== undefined ? req.body.orderstatus : 'Pending'}</p>
+                <p>Order_mark: ${req.body.order_mark !== undefined ? req.body.order_mark : 'Pending'}</p>
+                <p>sales_id: ${req.body.sales_id}</p>
+
+    
+                <h2>Product Details</h2>
+                <ul>
+                    ${req.body.products.map(product => `
+                        <li>
+                            <strong>Product Name:</strong> ${product.select_product}<br>
+                            <strong>Company:</strong> ${product.company}<br>
+                            <strong>Grade:</strong> ${product.grade}<br>
+                            <strong>Top Color:</strong> ${product.topcolor}<br>
+                            <strong>Coating:</strong> ${product.coating}<br>
+                            <strong>Temper:</strong> ${product.temper}<br>
+                            <strong>Guard Film:</strong> ${product.guardfilm}<br>
+                            <strong>Weight:</strong> ${product.weight}<br>
+                        </li>
+                    `).join('')}
+                </ul>
+            </body>
+        </html>
+    `;
+        
+        await page.setContent(orderDetailsHTML);
+
+        await page.pdf({ path: pdfPath, format: 'A4' });
+
+        await browser.close();
+        
+        // Create a read stream for the PDF file
+        const pdfReadStream = fileSystem.createReadStream(pdfPath);
+
+        const s3 = new AWS.S3();
+        const bucketName = 'orders-details';
+
+        const uploadParams = {
+            Bucket: bucketName,
+            Key: `${orderId}.pdf`,
+            Body:pdfReadStream,  // Use fs.createReadStream here
+            ContentType: 'application/pdf',
+        };
+
+       await s3.upload(uploadParams).promise();
+
+        const params = {
+            Bucket: bucketName,
+            Key: `${orderId}.pdf`,
+            Expires: 60, // Link will expire in 60 seconds (adjust as needed)
+        };
+
+        const pdfURL = await s3.getSignedUrlPromise('getObject', params);
+
+        // Set pdf_order data as the S3 URL
+        user.pdf_order.data = pdfURL;
+
+
+        // Ensure pdf_order is an object with type and data properties
+        if (!user.pdf_order || typeof user.pdf_order !== 'object') {
+            user.pdf_order = {
+                type: 'application/pdf',
+                data: null,
+            };
+        } else {
+            // If pdf_order is already an object, ensure it has the required properties
+            user.pdf_order.type = 'application/pdf';
+            user.pdf_order.data = null;
+        }
+
+        // Set pdf_order data as the path to the saved PDF file
+        user.pdf_order.data = pdfPath;
+        
 
         // Save the new sales order
         const newOrder = await user.save();
+        // Send the PDF file as a response
+
         return res.status(201).json({ "status": 201, "msg": 'Order successfully created', newOrder });
 
     } catch (err) {
         console.log(err);
         res.status(400).json({ "status": 400, "message": "Something Went Wrong" });
     }
-}
+};
+
+
+
+
+
+// exports.create = async (req, res) => {
+//     try {
+//         const data = (max) => {
+//             const newdata = Math.floor(Math.random() * max);
+//             console.log(newdata);
+//             return newdata;
+//         };
+
+//         // Replace max with a specific value when calling the function
+//         const result = data(1000000000000000); // Replace 100 with your desired max value
+
+//         // Create a new sales order instance
+//         const orderId = result;  // Store the generated order ID in a variable
+//         const pdfDirectory = 'order';  // Specify the directory where you want to save the PDF files
+//         const pdfPath = path.join(pdfDirectory, `${orderId}.pdf`);  // Specify the path for the PDF file
+
+//         const user = new salesorder({
+//             clientName: req.body.clientName,
+//             firmName: req.body.firmName,
+//             address: req.body.address,
+//             city: req.body.city,
+//             phone_no: req.body.phone_no,
+//             sales_id: req.body.sales_id,
+//             sales_name: req.body.sales_name,
+//             orderId: orderId,  // Use the stored order ID
+//             currentDate: new Date().toISOString(),
+//             deliveryDate: req.body.deliveryDate,
+//             note: req.body.note,
+//             orderstatus: req.body.orderstatus,
+//             Order_mark: req.body.Order_mark,
+//             products: req.body.products,
+//             ph_id: req.body.ph_id,
+//             ph_name: req.body.ph_name,
+//             process_bar: req.body.process_bar,
+//             smName: req.body.smName,
+//             vehicleNum: req.body.vehicleNum,
+//             dpDate: req.body.dpDate,
+//             dpRecieved: req.body.dpRecieved,
+//             dpPhone: req.body.dpPhone,
+//             dpTotalWeight: req.body.dpTotalWeight,
+//             productionincharge: req.body.productionincharge,
+//             pdf_order: {
+//                 type: 'application/pdf',
+//                 data: null,  // Initialize with null, will be replaced later
+//             },
+//         });
+
+     
+
+//         const browser = await puppeteer.launch({
+//             headless: true, // Set to true if you want to run in headless mode
+//         });
+
+//         const page = await browser.newPage();
+
+//         // Assuming 'orderDetailsHTML' is a variable containing your HTML content
+//         const orderDetailsHTML = `
+//             <html>
+//                 <head>
+//                     <title>Order Details</title>
+//                 </head>
+//                 <body>
+//                     <h1>Order Details</h1>
+//                     <p>Order ID: ${orderId}</p>
+//                     <!-- Display other order details here -->
+//                 </body>
+//             </html>
+//         `;
+//         await page.setContent(orderDetailsHTML);
+
+//         await page.pdf({ path: pdfPath, format: 'A4' });
+
+//         await browser.close();
+
+//         // Ensure pdf_order is an object with type and data properties
+//         if (!user.pdf_order || typeof user.pdf_order !== 'object') {
+//             user.pdf_order = {
+//                 type: 'application/pdf',
+//                 data: null,
+//             };
+//         } else {
+//             // If pdf_order is already an object, ensure it has the required properties
+//             user.pdf_order.type = 'application/pdf';
+//             user.pdf_order.data = null;
+//         }
+
+//         // Set pdf_order data as the path to the saved PDF file
+//         user.pdf_order.data = pdfPath;
+
+//         // Save the new sales order
+//         const newOrder = await user.save();
+
+//         return res.status(201).json({ "status": 201, "msg": 'Order successfully created', newOrder });
+
+//     } catch (err) {
+//         console.log(err);
+//         res.status(400).json({ "status": 400, "message": "Something Went Wrong" });
+//     }
+// };
+
               // Showing Empty data
 
 // exports.availableStock = async (req, res) => {
@@ -617,6 +886,9 @@ exports.delete = async(req, res) => {
                 .populate({
                     path: 'productionincharge',
                     select: '_id UserName' // Specify the fields you want to include from the 'productionincharge' collection
+                }).populate({
+                    path:'db_id',
+                    select:'_id UserName'
                 })
                 .skip((resPerPage * page) - resPerPage)
                 .limit(resPerPage);
@@ -627,8 +899,6 @@ exports.delete = async(req, res) => {
         }
     };
     
-
-
 
 
 // const redis = require('redis');
